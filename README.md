@@ -11,7 +11,16 @@
 
 **The Zero Knowledge Privacy Sidecar for LLM Pipelines.**
 
-`Blindfold` is a high performance, provider agnostic privacy gateway for LLMs. It sits between your app and any LLM API (OpenAI, Anthropic, Ollama, Vertex, and more), scrubs PII using a local privacy filter, and routes your request to the right provider. No code changes, no data leaks.
+`Blindfold` is a high performance, provider agnostic privacy gateway for LLMs. It sits between your app and any LLM API (OpenAI, Anthropic, Ollama, Vertex, and more), scrubs PII **locally** with **[OpenAI Privacy Filter](https://github.com/openai/privacy-filter)**, and routes your request to the right provider. No code changes, no data leaks.
+
+## Built on OpenAI Privacy Filter
+
+The reason Blindfold can claim context-aware masking—not brittle regex alone—is that PII detection and redaction are powered by **[OpenAI Privacy Filter](https://github.com/openai/privacy-filter)** (OPF): OpenAI’s open-weight, Apache-2.0 **bidirectional token-classification** model for PII spans in unstructured text. It runs on your machine; sensitive strings are labeled and masked **before** traffic goes to any LLM provider.
+
+- **Upstream code & CLI:** [openai/privacy-filter](https://github.com/openai/privacy-filter)  
+- **Weights:** [Hugging Face — `openai/privacy-filter`](https://huggingface.co/openai/privacy-filter)
+
+This repo depends on OPF directly (`git+https://github.com/openai/privacy-filter.git` in `requirements.txt`). **LiteLLM** is for universal LLM routing; **Privacy Filter** is the trust layer for *what* gets redacted. Review OPF’s [model card](https://huggingface.co/openai/privacy-filter) and limitations if you are evaluating this for production.
 
 ## How it Works
 
@@ -27,7 +36,7 @@ The LLM stays smart. Your data stays local. 100 percent HIPAA compliant chat in 
 
 * Universal Routing, supports OpenAI, Anthropic, Ollama, Vertex, and more. Just change the `model` string.
 * No Vendor Lock In, powered by [LiteLLM](https://github.com/BerriAI/litellm), so you can swap providers without rewriting code.
-* Contextual Privacy, regex is not enough. Blindfold uses a 1.5B parameter bidirectional model to understand context, ensuring that 'Washington' the person is masked, but 'Washington' the city is not.
+* Contextual Privacy, regex is not enough. OPF is a 1.5B-parameter (50M active) bidirectional model, so Blindfold can distinguish e.g. “Washington” the person vs the city.
 * Zero Code Changes, point your client to `http://localhost:8080` and go.
 * No Data Leaks, PII never leaves your machine. Only masked tokens ever hit the cloud.
 
@@ -57,12 +66,12 @@ docker compose up
 ## What’s Inside
 * FastAPI proxy for `/v1/chat/completions` and more
 * LiteLLM for universal provider routing
-* Local PII redaction using a privacy filter model
+* **[OpenAI Privacy Filter](https://github.com/openai/privacy-filter)** for local PII detection and masking
 * Redis mapping for PII tokens
 * Streams responses, keeps headers, and feels invisible
 
 ### Security Architecture
-* Bidirectional Context: The local 1.5B MoE model analyzes text in both directions, distinguishing "Apple" the company from "apple" the fruit with high accuracy.
+* Bidirectional Context: Privacy Filter’s local 1.5B MoE stack analyzes text in both directions, distinguishing "Apple" the company from "apple" the fruit with high accuracy.
 * Deterministic Tokenization: The same PII value always gets the same token within a session, preserving LLM context.
 * Ephemeral Vault: Mapping keys are stored in Redis with a TTL, so sensitive data is purged automatically.
 
